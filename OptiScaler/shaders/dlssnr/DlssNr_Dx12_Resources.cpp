@@ -23,7 +23,7 @@ auto DlssNr_Dx12::State::ReleaseSurfacesIfFormatChanged(DXGI_FORMAT needed) -> v
     modelRunning = false;
 
     for (ID3D12Resource** r : { &nr.output, &nr.passScratch, &nr.passClamp, &nr.colorCopy, &nr.hdrCopy, &nr.colorSmall,
-                                &nr.outputNative, &nr.activeColor })
+                                &nr.depthSmall, &nr.motionSmall, &nr.outputNative, &nr.activeColor })
         ParkNrResource(*r);
 
     nr.passScratchFailed = false;
@@ -190,7 +190,7 @@ auto DlssNr_Dx12::State::ReleaseResources() -> void
     modelRunning = false;
 
     for (auto** resource : { &nr.output, &nr.passScratch, &nr.passClamp, &nr.colorCopy, &nr.hdrCopy,
-                             &nr.activeColor, &nr.colorSmall })
+                             &nr.activeColor, &nr.colorSmall, &nr.depthSmall, &nr.motionSmall })
         ParkNrResource(*resource);
     nr.passScratchFailed = false;
 

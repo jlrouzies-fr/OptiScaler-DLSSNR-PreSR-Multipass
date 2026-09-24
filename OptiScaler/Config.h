@@ -286,6 +286,10 @@ class Config
     CustomOptional<float> DlssNrEnvironmentColour { 1.0f };
     CustomOptional<bool> DlssNrShowSkinMask { false };
     CustomOptional<bool> DlssNrUnlockPasses { false };
+    // Below-native WorkingScale: resample depth and motion to the model's working size, so the
+    // guides and the colour it reprojects agree pixel for pixel. Off hands the model full-size
+    // guides for a smaller colour, which is what flickered at every scale below 100%.
+    CustomOptional<bool> DlssNrMatchGuides { true };
     // Passes 2..30 inherit pass 1, except LocalTone defaults to zero.
     struct NrPassOverrides
     {
