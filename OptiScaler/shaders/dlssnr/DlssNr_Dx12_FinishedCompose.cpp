@@ -11,8 +11,41 @@ auto DlssNr_Dx12::State::ApplyFinishedColor(ID3D12Resource* color, ID3D12Command
         return false;
     }
     LateContext::ComPtr<ID3D12Device> currentDevice;
-    if (FAILED(queue->GetDevice(IID_PPV_ARGS(&currentDevice))) || currentDevice != late.device)
+    if (FAILED(queue->GetDevice(IID_PPV_ARGS(&currentDevice))) || !late.device)
         return false;
+    if (currentDevice != late.device)
+    {
+        // A layer between the game and OptiScaler (ReShade loaded through [Plugins] LoadReshade) can wrap the
+        // device and its queues, so Present sees another wrapper of the same device than the DLSS evaluate did.
+        // Submit on the queue the evaluate was submitted to: it belongs to the device the NR lists were made on.
+        // Resources are not wrapped, so the swapchain buffer is still valid there.
+        LateContext::ComPtr<ID3D12Device> producerDevice;
+        const bool sameAdapter = currentDevice->GetAdapterLuid().LowPart == late.device->GetAdapterLuid().LowPart &&
+                                 currentDevice->GetAdapterLuid().HighPart == late.device->GetAdapterLuid().HighPart;
+        const bool usable = sameAdapter && late.producerQueue &&
+                            SUCCEEDED(late.producerQueue->GetDevice(IID_PPV_ARGS(&producerDevice))) &&
+                            producerDevice == late.device && late.producerQueue->GetDesc().Type == queue->GetDesc().Type;
+        static bool logged = false;
+        if (!logged)
+        {
+            logged = true;
+            if (usable)
+                LOG_INFO("DLSS-NR finished picture: the Present queue is another wrapper of the game device "
+                         "(device {} vs {}); submitting on the DLSS producer queue {}",
+                         (void*) currentDevice.Get(), (void*) late.device.Get(), (void*) late.producerQueue.Get());
+            else
+                LOG_WARN("DLSS-NR finished picture: the Present queue {} belongs to device {}, not the DLSS device "
+                         "{}, and no producer queue on that device is known",
+                         (void*) queue, (void*) currentDevice.Get(), (void*) late.device.Get());
+        }
+        if (!usable)
+        {
+            late.Cancel();
+            late.Say("The picture is presented on another graphics device.");
+            return false;
+        }
+        queue = late.producerQueue.Get();
+    }
     ID3D12CommandQueue* realQueue = nullptr;
     if (!Util::CheckForRealObject(__FUNCTION__, queue, (IUnknown**) &realQueue))
         realQueue = queue;
