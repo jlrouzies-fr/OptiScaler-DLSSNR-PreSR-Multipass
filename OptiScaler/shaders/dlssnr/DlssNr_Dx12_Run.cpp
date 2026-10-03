@@ -56,6 +56,20 @@ auto DlssNr_Dx12::State::Run(ID3D12GraphicsCommandList* cmdList, ID3D12Resource*
         return;
     }
 
+    // A wrapper layer (ReShade proxies) can hand the output texture one identity for the game's device and
+    // the command list another. NGX and D3D12Core dereference the device behind the list being recorded, so
+    // follow the list; the wrong one faults inside the model.
+    {
+        Microsoft::WRL::ComPtr<ID3D12Device> listDevice;
+        if (SUCCEEDED(cmdList->GetDevice(IID_PPV_ARGS(&listDevice))) && listDevice.Get() != deviceRef.Get())
+        {
+            static bool logged = false;
+            if (!std::exchange(logged, true))
+                LOG_INFO("DLSS-NR: the output texture and the command list report different devices ({} vs {}); using the command list's",
+                         (void*) deviceRef.Get(), (void*) listDevice.Get());
+            deviceRef = listDevice;
+        }
+    }
     auto* device = deviceRef.Get();
     const D3D12_RESOURCE_DESC desc = target->GetDesc();
     const auto active =
