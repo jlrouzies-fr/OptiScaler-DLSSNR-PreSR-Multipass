@@ -155,6 +155,7 @@ bool Config::Reload(std::filesystem::path iniPath)
             FGHudlessValidNow.set_from_config(readBool("FrameGen", "HudlessValidNow"));
             FGOnlyAcceptFirstHudless.set_from_config(readBool("FrameGen", "OnlyAcceptFirstHudless"));
             FGPreserveSwapChain.set_from_config(readBool("FrameGen", "PreserveSwapChain"));
+            FGWrapCompositionSwapChain.set_from_config(readBool("FrameGen", "WrapCompositionSwapChain"));
             FGSkipResizeBuffers.set_from_config(readBool("FrameGen", "SkipResizeBuffers"));
             FGModifyBufferState.set_from_config(readBool("FrameGen", "ModifyBufferState"));
             FGModifySCIndex.set_from_config(readBool("FrameGen", "ModifySCIndex"));
@@ -557,6 +558,7 @@ bool Config::Reload(std::filesystem::path iniPath)
 
             // Don't enable again if set false because of Linux issue
             OverlayMenu.set_from_config(readBool("Menu", "OverlayMenu"));
+            MenuInputHooks.set_from_config(readBool("Menu", "InputHooks"));
             ShortcutKeyRequireCtrl.set_from_config(readBool("Menu", "ShortcutKeyRequireCtrl"));
             ShortcutKeyRequireAlt.set_from_config(readBool("Menu", "ShortcutKeyRequireAlt"));
             ShortcutKey.set_from_config(readInt("Menu", "ShortcutKey"));
@@ -1062,6 +1064,8 @@ bool Config::SaveIni(std::filesystem::path destination)
                      GetBoolValue(Instance()->FGHudlessValidNow.value_for_config()).c_str());
         ini.SetValue("FrameGen", "OnlyAcceptFirstHudless",
                      GetBoolValue(Instance()->FGOnlyAcceptFirstHudless.value_for_config()).c_str());
+        ini.SetValue("FrameGen", "WrapCompositionSwapChain",
+                     GetBoolValue(Instance()->FGWrapCompositionSwapChain.value_for_config()).c_str());
         ini.SetValue("FrameGen", "PreserveSwapChain",
                      GetBoolValue(Instance()->FGPreserveSwapChain.value_for_config()).c_str());
         ini.SetValue("FrameGen", "SkipResizeBuffers",
@@ -1502,6 +1506,7 @@ bool Config::SaveIni(std::filesystem::path destination)
     {
         ini.SetValue("Menu", "Scale", GetFloatValue(Instance()->MenuScale).c_str());
         ini.SetValue("Menu", "OverlayMenu", GetBoolValue(Instance()->OverlayMenu.value_for_config()).c_str());
+        ini.SetValue("Menu", "InputHooks", GetBoolValue(Instance()->MenuInputHooks.value_for_config()).c_str());
 
         auto setting = Instance()->ShortcutKey.value_for_config();
         ini.SetValue("Menu", "ShortcutKey",

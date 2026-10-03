@@ -450,6 +450,7 @@ class Config
     // Menu
     CustomOptional<float, NoDefault> MenuScale;
     CustomOptional<bool> OverlayMenu { true };
+    CustomOptional<bool> MenuInputHooks { true };
     CustomOptional<bool> ShortcutKeyRequireCtrl { false };
     CustomOptional<bool> ShortcutKeyRequireAlt { false };
     CustomOptional<int> ShortcutKey { VK_INSERT };
@@ -648,6 +649,7 @@ class Config
     CustomOptional<bool> FGHudlessValidNow { false };
     CustomOptional<bool> FGOnlyAcceptFirstHudless { false };
     CustomOptional<bool> FGPreserveSwapChain { true };
+    CustomOptional<bool> FGWrapCompositionSwapChain { true };
     CustomOptional<bool> FGSkipResizeBuffers { false };
     CustomOptional<bool> FGModifyBufferState { false };
     CustomOptional<bool> FGModifySCIndex { false };

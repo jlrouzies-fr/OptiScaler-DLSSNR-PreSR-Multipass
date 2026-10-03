@@ -294,6 +294,10 @@ void MenuCommon::UpdateManualInput(HWND targetHwnd)
             lastKey = vk;
             // receivingWmInputs = false;
             inputFlag = true;
+
+            // Polled-only input (InputHooks=false) has no message to consume, so hold the shortcuts off briefly.
+            if (!config->MenuInputHooks.value_or_default())
+                lastInputTick = GetTickCount64();
             LOG_DEBUG("{}", logMessage);
         }
     };

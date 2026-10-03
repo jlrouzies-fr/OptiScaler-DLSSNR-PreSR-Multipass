@@ -260,10 +260,18 @@ void ResolveOptionalUser32Exports()
 }
 } // namespace
 
+bool IsPassiveInput() { return !Config::Instance()->MenuInputHooks.value_or_default(); }
+
 bool InstallHooks()
 {
     if (_state.HooksInstalled)
         return true;
+
+    if (IsPassiveInput())
+    {
+        LOG_INFO("[Menu] InputHooks=false: no input hooks or window subclass; the menu polls keys and the cursor");
+        return true;
+    }
 
     LOG_INFO("installing Win32 input hooks currentPid:{} targetPid:{} inputPid:{}", _state.CurrentProcessId,
              _state.TargetProcessId, _state.InputProcessId);

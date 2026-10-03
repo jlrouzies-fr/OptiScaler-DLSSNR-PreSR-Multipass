@@ -1318,7 +1318,9 @@ HRESULT DxgiFactoryHooks::CreateSwapChainForComposition(IDXGIFactory2* realFacto
         ScopedSkipParentWrapping skipParentWrapping {};
         result = o_CreateSwapChainForComposition(realFactory, pDevice, pDesc, pRestrictToOutput, ppSwapChain);
     }
-    if (passThrough || FAILED(result) || *ppSwapChain == nullptr)
+    // WinUI 3 hands this chain to its SwapChainPanel, which cannot take a wrapper (heap corruption / XAML
+    // fail-fast in Elgato Studio). [FrameGen] WrapCompositionSwapChain=false leaves such chains untouched.
+    if (passThrough || FAILED(result) || *ppSwapChain == nullptr || !Config::Instance()->FGWrapCompositionSwapChain.value_or_default())
         return result;
 
     WrappedIDXGISwapChain4* existing = nullptr;

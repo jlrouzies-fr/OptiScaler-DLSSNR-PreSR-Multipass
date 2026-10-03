@@ -3,6 +3,9 @@
 
 #include <include/imgui/imgui.h>
 
+#include <atomic>
+#include <thread>
+
 namespace OptiInput
 {
 
@@ -115,7 +118,7 @@ void UpdateOptionalInputIntegrations()
     {
         std::unique_lock stateLock(_state.Mutex);
 
-        if (!_state.Initialized || !_state.HooksInstalled)
+        if (!_state.Initialized || !_state.HooksInstalled || IsPassiveInput())
             return;
     }
 
@@ -672,6 +675,67 @@ bool ApplyExternalVirtualMouseLocked(HWND coordinateHwnd, const POINT& absoluteC
 }
 } // namespace
 
+namespace
+{
+// Passive input (InputHooks=false) cannot poll the wheel, and hooking the app's message APIs is exactly what passive
+// mode avoids. A system low-level mouse hook sees the wheel without touching them; it runs on its own thread with its
+// own message loop (an LL hook is called on the installing thread, which must keep pumping or input lags system-wide).
+std::atomic<int> passiveWheelDelta { 0 };
+std::atomic<ULONGLONG> passiveWheelTick { 0 };
+std::atomic<bool> passiveWheelStarted { false };
+
+LRESULT CALLBACK PassiveWheelProc(int code, WPARAM wParam, LPARAM lParam)
+{
+    if (code == HC_ACTION && wParam == WM_MOUSEWHEEL && lParam != 0)
+    {
+        DWORD foregroundPid = 0;
+        if (const HWND foreground = GetForegroundWindow(); foreground != nullptr)
+            GetWindowThreadProcessId(foreground, &foregroundPid);
+
+        if (foregroundPid == GetCurrentProcessId())
+        {
+            passiveWheelDelta += static_cast<SHORT>(HIWORD(reinterpret_cast<const MSLLHOOKSTRUCT*>(lParam)->mouseData));
+            passiveWheelTick = GetTickCount64();
+        }
+    }
+
+    return CallNextHookEx(nullptr, code, wParam, lParam);
+}
+
+void StartPassiveWheelHook()
+{
+    if (passiveWheelStarted.exchange(true))
+        return;
+
+    std::thread(
+        []()
+        {
+            HMODULE module = nullptr;
+            GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                               reinterpret_cast<LPCWSTR>(&PassiveWheelProc), &module);
+
+            const HHOOK hook = SetWindowsHookExW(WH_MOUSE_LL, PassiveWheelProc, module, 0);
+            if (hook == nullptr)
+            {
+                LOG_WARN("[Menu] InputHooks=false: wheel hook not installed, error {}", GetLastError());
+                return;
+            }
+
+            LOG_INFO("[Menu] InputHooks=false: low-level wheel hook installed on its own thread");
+
+            MSG msg {};
+            while (GetMessageW(&msg, nullptr, 0, 0) > 0)
+            {
+                TranslateMessage(&msg);
+                DispatchMessageW(&msg);
+            }
+
+            UnhookWindowsHookEx(hook);
+        })
+        .detach();
+}
+} // namespace
+
 void PollInputFallbackLocked()
 {
     _state.PolledInputActive = false;
@@ -693,6 +757,20 @@ void PollInputFallbackLocked()
     // can see anything. Polling here is an input acquisition fallback for Opti's UI;
     // it does not by itself block the game from reading input.
     _state.PolledInputActive = true;
+
+    // Passive input: polling is the only source, and it runs once per menu instance per frame (a process can hold
+    // several). Edges must describe this poll alone, or a release seen by one instance toggles the next one too.
+    if (IsPassiveInput())
+    {
+        for (ButtonState& key : _state.Keys)
+            key.Pressed = key.Released = false;
+
+        for (ButtonState& button : _state.MouseButtons)
+            button.Pressed = button.Released = false;
+    }
+
+    if (IsPassiveInput())
+        StartPassiveWheelHook();
 
     const DWORD time = GetTickCount();
 
@@ -797,8 +875,14 @@ void ApplyMenuVisibilityChangeLocked(bool visible)
     }
 }
 
-bool Initialize(const InitializeOptions& options)
+bool Initialize(const InitializeOptions& requested)
 {
+    // [Menu] InputHooks=false = passive mode: no WndProc subclass, no Win32/controller detours (see InstallHooks);
+    // the menu reads keys and the cursor through the per-frame polling fallback only.
+    InitializeOptions options = requested;
+    if (IsPassiveInput())
+        options.UseWndProcSubclass = false;
+
     std::unique_lock lock(_state.Mutex);
 
     if (_state.CurrentProcessId == 0)
@@ -1322,6 +1406,15 @@ void FeedImGui(bool menuVisible)
 
     if (_state.MouseWheel != 0.0f)
         io.AddMouseWheelEvent(0.0f, _state.MouseWheel);
+
+    // Passive wheel: taken here, by the menu instance that is visible, not in the shared poll -- a process can hold
+    // several instances and a hidden one would swallow it. Notches older than 500 ms were scrolled with the menu shut.
+    if (IsPassiveInput())
+    {
+        const int wheel = passiveWheelDelta.exchange(0);
+        if (wheel != 0 && GetTickCount64() - passiveWheelTick.load() < 500)
+            io.AddMouseWheelEvent(0.0f, static_cast<float>(wheel) / static_cast<float>(WHEEL_DELTA));
+    }
 
     io.AddMouseButtonEvent(0, _state.MouseButtons[0].Down);
     io.AddMouseButtonEvent(1, _state.MouseButtons[1].Down);

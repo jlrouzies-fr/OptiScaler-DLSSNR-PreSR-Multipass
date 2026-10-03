@@ -566,6 +566,11 @@ void UpdateMousePositionFromClient(HWND hwnd, LPARAM lParam);
 bool ProcessRemovedMessage(MSG* msg);
 void ConsumeMessage(MSG* msg);
 SHORT RealGetAsyncKeyStateSafe(int vk);
+
+// [Menu] InputHooks=false: another overlay in the process (ReShade polling the cursor for a WinUI 3 composition swap
+// chain) owns GetCursorPos/SetCursorPos and the key-state APIs; ours on top froze its cursor and made its toggle key
+// repeat. Passive input = polling only, nothing hooked, and the menu cannot block input from the app.
+bool IsPassiveInput();
 SHORT RealGetKeyStateSafe(int vk);
 BOOL RealGetCursorPosSafe(LPPOINT point);
 void SetMouseDownFromRawState(int button, DWORD messageTime, bool blocked);
