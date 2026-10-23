@@ -1610,7 +1610,8 @@ static void CheckQuirks(bool isNvidia)
 
         if (!Config::Instance()->CreateD3D12DeviceForLuma.has_value())
         {
-            quirks |= GameQuirk::LoadD3D12Manually;
+            if (!(quirks & GameQuirk::SkipD3D11FeatureLevelElevation))
+                quirks |= GameQuirk::LoadD3D12Manually;
 
             if (Config::Instance()->LoadReShade.value_or_default())
             {
@@ -1761,7 +1762,7 @@ DWORD WINAPI getGpuInfo(LPVOID hModuleVoid)
     }
 
     // If DX12 already loaded then grab the full GPU info right away
-    if (hModuleVoid)
+    if (hModuleVoid && !(State::Instance().gameQuirks & GameQuirk::SkipD3D11FeatureLevelElevation))
         IdentifyGpu::updateD3d12Capabilities();
 
     return 0;

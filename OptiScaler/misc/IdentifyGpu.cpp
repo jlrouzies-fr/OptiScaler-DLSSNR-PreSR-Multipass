@@ -381,6 +381,9 @@ void IdentifyGpu::updateD3d12Capabilities(D3d12Proxy::PFN_D3D12CreateDevice o_D3
     if (hasD3d12Capabilities)
         return;
 
+    if (State::Instance().gameQuirks & GameQuirk::SkipD3D11FeatureLevelElevation)
+        return;
+
     // Making sure the cache is filled
     getAllGpus();
 
@@ -407,8 +410,15 @@ void IdentifyGpu::updateD3d12Capabilities(D3d12Proxy::PFN_D3D12CreateDevice o_D3
     };
     std::vector<D3d12Result> results;
 
+    auto primGpu = IdentifyGpu::getPrimaryGpu();
     for (auto& gpuInfo : cache)
     {
+        if (gpuInfo.vendorId == VendorId::AMD && !IsEqualLUID(gpuInfo.luid, primGpu.luid) &&
+            Config::Instance()->Fsr4ForceModel.value_or_default() == FSR4Support::None)
+        {
+            continue;
+        }
+
         if (gpuInfo.vendorId != VendorId::AMD && !gpuInfo.usesDxvk &&
             Config::Instance()->Fsr4ForceModel.value_or_default() == FSR4Support::None)
         {

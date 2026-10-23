@@ -551,6 +551,9 @@ static const QuirkEntry quirkTable[] = {
     // Hudfix incompatible
     QUIRK_ENTRY("rottr.exe", GameQuirk::SkipD3D11FeatureLevelElevation),
 
+    // Metro 2033 Redux / Metro Last Light Redux
+    QUIRK_ENTRY("metro.exe", GameQuirk::SkipD3D11FeatureLevelElevation),
+
     // Shadow of the Tomb Raider
     // Hudfix incompatible
     QUIRK_ENTRY("sottr.exe", GameQuirk::DisableHudfix),
