@@ -365,6 +365,12 @@ class Config
     // Model width/height scale; composition remains at the input size.
     CustomOptional<float> DlssNrWorkingScale { 1.0f };
 
+    // Dynamic model resolution: hold DynamicTargetFps by moving the model scale within [min, max]
+    CustomOptional<bool> DlssNrDynamicScale { false };
+    CustomOptional<float> DlssNrDynamicTargetFps { 40.0f };
+    CustomOptional<float> DlssNrDynamicMinScale { 0.05f };
+    CustomOptional<float> DlssNrDynamicMaxScale { 0.35f };
+
     CustomOptional<bool> DlssNrSpatialCompression { false };
     CustomOptional<float> DlssNrSpatialCenterX { 80.0f };
     CustomOptional<float> DlssNrSpatialCenterY { 80.0f };

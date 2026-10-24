@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "DlssNr_Dx12_State.h"
+#include "dlssnr/DlssNr_DynamicScale.h"
 
 auto DlssNr_Dx12::State::Run(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* colour, ID3D12Resource* depth,
                              ID3D12Resource* motion, ID3D12Resource* output, const DlssNrFrameInfo& frame,
@@ -123,10 +124,7 @@ auto DlssNr_Dx12::State::Run(ID3D12GraphicsCommandList* cmdList, ID3D12Resource*
     }
 
     // Only the model runs at working resolution; source and composition remain at native size.
-    float workScale = cfg.DlssNrWorkingScale.value_or_default();
-    if (!std::isfinite(workScale))
-        workScale = 1.0f;
-    workScale = std::clamp(workScale, 0.25f, 2.0f);
+    const float workScale = DlssNr::DynamicScale::WorkScale(cfg);
     const auto workWidth = (unsigned int) (width * workScale + 0.5f);
     const auto workHeight = (unsigned int) (height * workScale + 0.5f);
     const bool reduced = workWidth != width || workHeight != height;

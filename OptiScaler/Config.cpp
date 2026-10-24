@@ -364,6 +364,10 @@ bool Config::Reload(std::filesystem::path iniPath)
             DlssNrCompareTags.set_from_config(readBool("DlssNr", "CompareTags"));
             DlssNrTagScale.set_from_config(readFloat("DlssNr", "TagScale"));
             DlssNrWorkingScale.set_from_config(readFloat("DlssNr", "WorkingScale"));
+            DlssNrDynamicScale.set_from_config(readBool("DlssNr", "DynamicScale"));
+            DlssNrDynamicTargetFps.set_from_config(readFloat("DlssNr", "DynamicTargetFps"));
+            DlssNrDynamicMinScale.set_from_config(readFloat("DlssNr", "DynamicMinScale"));
+            DlssNrDynamicMaxScale.set_from_config(readFloat("DlssNr", "DynamicMaxScale"));
             DlssNrSpatialCompression.set_from_config(readBool("DlssNr", "SpatialCompression"));
             DlssNrSpatialCenterX.set_from_config(readFloat("DlssNr", "SpatialCenterX"));
             DlssNrSpatialCenterY.set_from_config(readFloat("DlssNr", "SpatialCenterY"));
@@ -1333,6 +1337,14 @@ bool Config::SaveIni(std::filesystem::path destination)
         ini.SetValue("DlssNr", "TagScale", GetFloatValue(Instance()->DlssNrTagScale.value_for_config()).c_str());
         ini.SetValue("DlssNr", "WorkingScale",
                      GetFloatValue(Instance()->DlssNrWorkingScale.value_for_config()).c_str());
+        ini.SetValue("DlssNr", "DynamicScale",
+                     GetBoolValue(Instance()->DlssNrDynamicScale.value_for_config()).c_str());
+        ini.SetValue("DlssNr", "DynamicTargetFps",
+                     GetFloatValue(Instance()->DlssNrDynamicTargetFps.value_for_config()).c_str());
+        ini.SetValue("DlssNr", "DynamicMinScale",
+                     GetFloatValue(Instance()->DlssNrDynamicMinScale.value_for_config()).c_str());
+        ini.SetValue("DlssNr", "DynamicMaxScale",
+                     GetFloatValue(Instance()->DlssNrDynamicMaxScale.value_for_config()).c_str());
         ini.SetValue("DlssNr", "SpatialCompression",
                      GetBoolValue(Instance()->DlssNrSpatialCompression.value_for_config()).c_str());
         ini.SetValue("DlssNr", "SpatialCenterX",

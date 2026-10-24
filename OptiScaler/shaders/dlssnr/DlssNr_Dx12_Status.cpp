@@ -30,7 +30,7 @@ auto DlssNr_Dx12::State::ConsumeControls() -> void
 {
     const auto& cfg = *Config::Instance();
     if (!cfg.DlssNrEnabled.value_or_default() || !DlssNrUsesDlssEnlargement(cfg.DlssNrTransfer.value_or_default()) ||
-        cfg.DlssNrWorkingScale.value_or_default() >= 1.0f)
+        (cfg.DlssNrDynamicScale.value_or_default() ? cfg.DlssNrDynamicMinScale.value_or_default() : cfg.DlssNrWorkingScale.value_or_default()) >= 1.0f)
     {
         ReleaseEnlarger();
         enlargementStatus.clear();

@@ -8,6 +8,7 @@
 #include <nvsdk_ngx_vk.h>
 #include "PassProfiles.h"
 #include "DlssNr_Exposure.h"
+#include "DlssNr_DynamicScale.h"
 
 #include <Config.h>
 #include <State.h>
@@ -64,7 +65,7 @@ bool ModelVk::Impl::Evaluate(VkCommandBuffer cmdBuffer, const VkImageInfo& colou
     std::lock_guard<std::mutex> lock(mutex);
     state.spatialRan = false;
     if (DlssNrUsesDlssEnlargement(cfg.DlssNrTransfer.value_or_default()) &&
-        cfg.DlssNrWorkingScale.value_or_default() < 1.0f)
+        (cfg.DlssNrDynamicScale.value_or_default() ? cfg.DlssNrDynamicMinScale.value_or_default() : cfg.DlssNrWorkingScale.value_or_default()) < 1.0f)
     {
         PublishStatus(this, Backend::Vulkan, { false, "DLSS enlargement requires the DX12 processing path." });
         return false;
@@ -143,8 +144,7 @@ bool ModelVk::Impl::Evaluate(VkCommandBuffer cmdBuffer, const VkImageInfo& colou
         return false;
 
     // The model uses working resolution; source and composition remain native.
-    float workScale = cfg.DlssNrWorkingScale.value_or_default();
-    workScale = std::isfinite(workScale) ? std::clamp(workScale, 0.25f, 2.0f) : 1.0f;
+    const float workScale = DlssNr::DynamicScale::WorkScale(cfg);
     auto spatial = Spatial::Build(Spatial::ReadSettings(cfg), width, height, workScale);
     if (state.spatialDisabled &&
         (spatial != state.spatialAttemptLayout || colourInfo.Format != state.spatialColourFormat ||

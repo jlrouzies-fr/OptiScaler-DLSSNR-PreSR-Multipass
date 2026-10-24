@@ -2,6 +2,7 @@
 #include "DlssNr_MenuSections.h"
 #include "DlssNr_Placement.h"
 #include "DlssNr_Status.h"
+#include "DlssNr_DynamicScale.h"
 #include <shaders/dlssnr/DlssNr_Spatial.h>
 #include <Config.h>
 #include <menu/menu_common.h>
@@ -143,8 +144,51 @@ void RenderInput(Config* config)
     int scalePercent =
         pendingScale >= 0 ? pendingScale : (int) lroundf(config->DlssNrWorkingScale.value_or_default() * 100.0f);
 
+    bool dynamic = config->DlssNrDynamicScale.value_or_default();
+    if (ImGui::Checkbox("Dynamic model resolution", &dynamic))
+        config->DlssNrDynamicScale = dynamic;
+    HelpMarker("Moves model resolution between the min and max in 5% steps to hold the target frame rate. "
+               "Each change resets NR history (a brief settle).");
+    if (dynamic)
+    {
+        static int pendingFps = -1, pendingMin = -1, pendingMax = -1;
+        auto commitInt = [](const char* label, int& pending, int current, int lo, int hi, const char* fmt) -> bool
+        {
+            int v = pending >= 0 ? pending : current;
+            if (ImGui::SliderInt(label, &v, lo, hi, fmt))
+                pending = v;
+            return ImGui::IsItemDeactivatedAfterEdit() && pending >= 0;
+        };
+        const int fps = (int) lroundf(config->DlssNrDynamicTargetFps.value_or_default());
+        const int minP = (int) lroundf(config->DlssNrDynamicMinScale.value_or_default() * 100.0f);
+        const int maxP = (int) lroundf(config->DlssNrDynamicMaxScale.value_or_default() * 100.0f);
+        if (commitInt("Target FPS", pendingFps, fps, 20, 240, "%d fps"))
+        {
+            config->DlssNrDynamicTargetFps = (float) pendingFps;
+            pendingFps = -1;
+        }
+        if (commitInt("Min model resolution", pendingMin, minP, 5, 200, "%d%%"))
+        {
+            config->DlssNrDynamicMinScale = pendingMin / 100.0f;
+            if (pendingMin > maxP)
+                config->DlssNrDynamicMaxScale = pendingMin / 100.0f;
+            pendingMin = -1;
+        }
+        if (commitInt("Max model resolution", pendingMax, maxP, 5, 200, "%d%%"))
+        {
+            config->DlssNrDynamicMaxScale = pendingMax / 100.0f;
+            if (pendingMax < minP)
+                config->DlssNrDynamicMinScale = pendingMax / 100.0f;
+            pendingMax = -1;
+        }
+        auto& dyn = DynamicScale::Instance();
+        ImGui::Text("Now: %.0f%%, %.1f ms", dyn.current.load() * 100.0f, dyn.averageMs.load());
+    }
+
+    ImGui::BeginDisabled(dynamic);
     if (ImGui::SliderInt("Model resolution", &scalePercent, 25, 200, "%d%%"))
         pendingScale = scalePercent;
+    ImGui::EndDisabled();
 
     if (ImGui::IsItemDeactivatedAfterEdit() && pendingScale >= 0)
     {
