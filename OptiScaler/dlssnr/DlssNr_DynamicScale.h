@@ -1,13 +1,15 @@
 #pragma once
 
 // Dynamic model resolution: steps the NR working scale between [MinScale, MaxScale] to hold a frame-rate target.
-// Each step changes the model size, which resets NR history, so steps are coarse (5%), slow and sticky:
-// one step down after 0.5 s over target, one step up after 2 s on target, and a level that just missed the
-// target is not retried for 20 s. Driven by the present-to-present time OptiScaler already measures.
+// Each step changes the model size, which resets NR history, so steps are coarse (5%) and sticky; a level that
+// just went over budget is not retried for 20 s. Driven by the GPU time of the whole frame (FrameGpuTime), which
+// still shows the margin under a frame cap: down above 92% of the budget, before a frame is late, up below 80%.
+// Falls back to the present-to-present time (down above 105%, up at or below 102%) without GPU samples.
 
 #include "Config.h"
 #include "State.h"
 #include "Util.h"
+#include "DlssNr_FrameGpuTime.h"
 
 #include <algorithm>
 #include <atomic>
@@ -31,8 +33,10 @@ struct Controller
     double holdUntil = 0.0;      // no change before this time
     int blockedLevel = -1;       // level that missed the target
     double blockedUntil = 0.0;
+    double lastReport = 0.0;
     std::atomic<float> current { 1.0f };
     std::atomic<float> averageMs { 0.0f };
+    std::atomic<bool> usingGpu { false };
 };
 
 inline Controller& Instance()
@@ -78,14 +82,17 @@ inline float WorkScale(const Config& cfg)
     }
     c.level = std::clamp(c.level, 0, top);
 
-    const double ft = ::State::Instance().presentFrameTime;
+    const double gpu = FrameGpuTime::Instance().Recent(now);
+    const bool useGpu = gpu > 0.0 && gpu < 1000.0;
+    const double ft = useGpu ? gpu : ::State::Instance().presentFrameTime;
     if (ft > 0.0 && ft < 1000.0)
     {
         c.sum += ft;
         ++c.count;
     }
 
-    if (now - c.windowStart >= 500.0 && c.count > 0)
+    // GPU time is steady under a cap, so it can react within a few frames
+    if (now - c.windowStart >= (useGpu ? 150.0 : 500.0) && c.count > 0)
     {
         float fps = cfg.DlssNrDynamicTargetFps.value_or_default();
         fps = std::isfinite(fps) ? std::clamp(fps, 10.0f, 500.0f) : 40.0f;
@@ -96,7 +103,15 @@ inline float WorkScale(const Config& cfg)
         c.sum = 0.0;
         c.count = 0;
 
-        if (avg > target * 1.05)
+        const double downAt = useGpu ? 0.92 : 1.05, upAt = useGpu ? 0.80 : 1.02;
+        c.usingGpu = useGpu;
+        if (now - c.lastReport >= 5000.0)
+        {
+            c.lastReport = now;
+            LOG_INFO("DLSS-NR dynamic: {} {:.1f} ms (target {:.1f} ms), model resolution {:.0f}%",
+                     useGpu ? "GPU" : "frame (no GPU timer)", avg, target, (lo + c.level * Step) * 100.0f);
+        }
+        if (avg > target * downAt)
         {
             c.goodWindows = 0;
             if (now >= c.holdUntil && c.level > 0)
@@ -104,21 +119,22 @@ inline float WorkScale(const Config& cfg)
                 c.blockedLevel = c.level;
                 c.blockedUntil = now + 20000.0;
                 --c.level;
-                c.holdUntil = now + 1000.0;
-                LOG_INFO("DLSS-NR dynamic: {:.1f} ms over {:.1f} ms target, model resolution down to {:.0f}%", avg,
-                         target, (lo + c.level * Step) * 100.0f);
+                c.holdUntil = now + (useGpu ? 400.0 : 1000.0);
+                LOG_INFO("DLSS-NR dynamic: {} {:.1f} ms over {:.0f}% of {:.1f} ms, model resolution down to {:.0f}%",
+                         useGpu ? "GPU" : "frame", avg, downAt * 100.0, target, (lo + c.level * Step) * 100.0f);
             }
         }
-        else if (avg <= target * 1.02)
+        else if (avg <= target * upAt)
         {
             ++c.goodWindows;
             const bool blocked = c.level + 1 == c.blockedLevel && now < c.blockedUntil;
-            if (c.goodWindows >= 4 && now >= c.holdUntil && c.level < top && !blocked)
+            if (c.goodWindows >= (useGpu ? 13u : 4u) && now >= c.holdUntil && c.level < top && !blocked)
             {
                 ++c.level;
                 c.goodWindows = 0;
                 c.holdUntil = now + 2000.0;
-                LOG_INFO("DLSS-NR dynamic: on target, model resolution up to {:.0f}%", (lo + c.level * Step) * 100.0f);
+                LOG_INFO("DLSS-NR dynamic: {} {:.1f} ms, model resolution up to {:.0f}%", useGpu ? "GPU" : "frame", avg,
+                         (lo + c.level * Step) * 100.0f);
             }
         }
         else

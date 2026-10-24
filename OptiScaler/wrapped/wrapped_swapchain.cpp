@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "wrapped_swapchain.h"
 #include <dlssnr/DlssNr.h>
+#include <dlssnr/DlssNr_FrameGpuTime.h>
 #include <hooks/DxgiSwapchainSizing.h>
 
 #include <Util.h>
@@ -365,6 +366,10 @@ static HRESULT LocalPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
             State::Instance().currentD3D12Device = device12;
             D3D12Hooks::HookDevice(device12);
         }
+
+        // Frame end stamp for the dynamic NR resolution (needs the NR queue hook's real ExecuteCommandLists)
+        if (willPresent && Config::Instance()->DlssNrDynamicScale.value_or_default())
+            DlssNr::FrameGpuTime::Instance().BeforePresent(cq, DlssNr::FrameGpuTime::RealExecute().load());
     }
 
     auto fg = State::Instance().currentFG;

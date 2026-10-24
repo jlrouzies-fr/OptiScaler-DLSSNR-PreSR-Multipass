@@ -182,7 +182,8 @@ void RenderInput(Config* config)
             pendingMax = -1;
         }
         auto& dyn = DynamicScale::Instance();
-        ImGui::Text("Now: %.0f%%, %.1f ms", dyn.current.load() * 100.0f, dyn.averageMs.load());
+        ImGui::Text("Now: %.0f%%, %s %.1f ms", dyn.current.load() * 100.0f, dyn.usingGpu.load() ? "GPU" : "frame",
+                    dyn.averageMs.load());
     }
 
     ImGui::BeginDisabled(dynamic);

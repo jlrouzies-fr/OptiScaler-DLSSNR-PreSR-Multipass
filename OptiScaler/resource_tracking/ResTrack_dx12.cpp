@@ -1,6 +1,7 @@
 #include "pch.h"
 
 #include <dlssnr/DlssNr.h>
+#include <dlssnr/DlssNr_FrameGpuTime.h>
 
 #include "ResTrack_dx12.h"
 
@@ -737,7 +738,10 @@ void ResTrack_Dx12::hkCreateUnorderedAccessView(ID3D12Device* This, ID3D12Resour
 static void STDMETHODCALLTYPE hkNrExecuteCommandLists(ID3D12CommandQueue* queue, UINT count,
                                                       ID3D12CommandList* const* lists)
 {
-    o_ExecuteCommandLists(queue, count, lists);
+    if (Config::Instance()->DlssNrDynamicScale.value_or_default())
+        DlssNr::FrameGpuTime::Instance().Execute(queue, count, lists, o_ExecuteCommandLists);
+    else
+        o_ExecuteCommandLists(queue, count, lists);
     DlssNr::FinishedPictureSubmitted(queue, count, lists);
 }
 
@@ -2664,6 +2668,7 @@ static void HookNrQueue(ID3D12Device* InDevice)
             LOG_ERROR("Failed to hook CommandList methods: {:X}", detourResult);
             o_ExecuteCommandLists = nullptr;
         }
+        DlssNr::FrameGpuTime::RealExecute() = o_ExecuteCommandLists;
 
         queue->Release();
     }
