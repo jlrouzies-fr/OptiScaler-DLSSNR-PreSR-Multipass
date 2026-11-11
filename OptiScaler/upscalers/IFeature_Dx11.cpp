@@ -26,7 +26,8 @@ bool IFeature_Dx11::Init(ID3D11Device* InDevice, ID3D11DeviceContext* InContext,
     if (result)
     {
         if (!Config::Instance()->OverlayMenu.value_or_default() && (Imgui == nullptr || Imgui.get() == nullptr))
-            Imgui = std::make_unique<Menu_Dx11>(Util::GetProcessWindow(), InDevice);
+            if (HWND host = MenuDxBase::ResolveHostWindow(); host != nullptr)
+                Imgui = std::make_unique<Menu_Dx11>(host, InDevice);
 
         OutputScaler = std::make_unique<OS_Dx11>("Output Scaling", InDevice, (TargetWidth() < DisplayWidth()));
         RCAS = std::make_unique<RCAS_Dx11>("RCAS", InDevice);
@@ -294,17 +295,14 @@ bool IFeature_Dx11::Evaluate(ID3D11DeviceContext* InDeviceContext, NVSDK_NGX_Par
     {
         if (Imgui != nullptr && Imgui.get() != nullptr)
         {
-            if (Imgui->IsHandleDifferent())
-            {
-                Imgui.reset();
-            }
-            else
-                Imgui->Render(InDeviceContext, paramOutput);
+            Imgui->SyncHandle();
+            Imgui->Render(InDeviceContext, paramOutput);
         }
         else
         {
-            if (Imgui == nullptr || Imgui.get() == nullptr)
-                Imgui = std::make_unique<Menu_Dx11>(GetForegroundWindow(), Device);
+            // Only ever for a window of this process (see MenuDxBase::SyncHandle).
+            if (HWND host = MenuDxBase::ResolveHostWindow(); host != nullptr)
+                Imgui = std::make_unique<Menu_Dx11>(host, Device);
         }
     }
 

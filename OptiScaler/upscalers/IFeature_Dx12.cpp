@@ -32,7 +32,11 @@ bool IFeature_Dx12::Init(ID3D12Device* InDevice, ID3D12GraphicsCommandList* InCo
     if (result)
     {
         if (!Config::Instance()->OverlayMenu.value_or_default() && (Imgui == nullptr || Imgui.get() == nullptr))
-            Imgui = std::make_unique<Menu_Dx12>(Util::GetProcessWindow(), InDevice);
+        {
+            // No window of our own yet: Evaluate makes the menu once there is one.
+            if (HWND host = MenuDxBase::ResolveHostWindow(); host != nullptr)
+                Imgui = std::make_unique<Menu_Dx12>(host, InDevice);
+        }
 
         OutputScaler = std::make_unique<OS_Dx12>("Output Scaling", InDevice, (TargetWidth() < DisplayWidth()));
         RCAS = std::make_unique<RCAS_Dx12>("RCAS", InDevice);
@@ -57,6 +61,16 @@ bool IFeature_Dx12::Evaluate(ID3D12GraphicsCommandList* InCommandList, NVSDK_NGX
     {
         LOG_ERROR("Not inited!");
         return false;
+    }
+
+    // A pass whose construction failed (descriptor heaps, pipeline) used to stay in place, dead,
+    // for the life of the feature, with one error line at creation and nothing after. Try again
+    // every ten seconds or so, and say so.
+    if (NeuralRendering && !NeuralRendering->IsInit() && Config::Instance()->DlssNrEnabled.value_or_default() &&
+        _frameCount > 0 && (_frameCount % 600) == 0)
+    {
+        LOG_WARN("DLSS-NR is not initialised (see the error at its creation); creating it again");
+        NeuralRendering.reset();
     }
 
     if (!NeuralRendering && Config::Instance()->DlssNrEnabled.value_or_default())
@@ -317,17 +331,14 @@ bool IFeature_Dx12::Evaluate(ID3D12GraphicsCommandList* InCommandList, NVSDK_NGX
     {
         if (Imgui != nullptr && Imgui.get() != nullptr)
         {
-            if (Imgui->IsHandleDifferent())
-            {
-                Imgui.reset();
-            }
-            else
-                Imgui->Render(InCommandList, paramOutput);
+            Imgui->SyncHandle();
+            Imgui->Render(InCommandList, paramOutput);
         }
         else
         {
-            if (Imgui == nullptr || Imgui.get() == nullptr)
-                Imgui = std::make_unique<Menu_Dx12>(GetForegroundWindow(), Device);
+            // Only ever for a window of this process (see MenuDxBase::SyncHandle).
+            if (HWND host = MenuDxBase::ResolveHostWindow(); host != nullptr)
+                Imgui = std::make_unique<Menu_Dx12>(host, Device);
         }
     }
 

@@ -195,6 +195,8 @@ class MenuCommon
 
     static bool RenderMenu();
     static void Init(HWND InHwnd, bool isUWP);
+    // Moves an initialised menu to another window: platform backend and input only.
+    static void Retarget(HWND InHwnd);
     static void Shutdown();
     static void HideMenu();
     static void Present();

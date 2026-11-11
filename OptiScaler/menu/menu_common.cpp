@@ -8095,6 +8095,29 @@ void MenuCommon::Init(HWND InHwnd, bool isUWP)
     _isInited = true;
 }
 
+void MenuCommon::Retarget(HWND InHwnd)
+{
+    if (!MenuCommon::_isInited || InHwnd == nullptr || InHwnd == _handle)
+        return;
+
+    // The platform backend keeps the window it was initialised with; it holds no GPU objects,
+    // so it can be swapped under a live context and renderer.
+    if (!_isUWP)
+    {
+        ImGui_ImplWin32_Shutdown();
+        ImGui_ImplWin32_Init(InHwnd);
+    }
+    else
+    {
+        ImGui_ImplUwp_Shutdown();
+        ImGui_ImplUwp_Init(InHwnd);
+        ImGui_BindUwpKeyUp(KeyUp);
+    }
+
+    _handle = InHwnd;
+    OptiInput::Initialize(_handle, _isUWP);
+}
+
 void MenuCommon::Shutdown()
 {
     if (!MenuCommon::_isInited)

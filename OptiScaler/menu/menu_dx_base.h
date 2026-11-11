@@ -49,7 +49,12 @@ class MenuDxBase
     int Top() { return _top; }
     int Left() { return _left; }
     HWND Handle() { return _handle; }
-    bool IsHandleDifferent();
+    // The host process's own top-level window, or nullptr while there is none to name. Never
+    // another process's window: Util::GetProcessWindow() falls back to the foreground window.
+    static HWND ResolveHostWindow();
+    // Follows the host window if the one this menu was made for is gone. Re-targets the
+    // platform backend and the input layer in place; the renderer and its GPU objects stay.
+    void SyncHandle();
     static void Dx11Ready();
     static void Dx12Ready();
 

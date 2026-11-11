@@ -246,12 +246,15 @@ Menu_Dx12::~Menu_Dx12()
 {
     // g_pd3dSrvDescHeapAlloc.Destroy(); // Can cause a crash on app close, unsure why
 
-    if (!_dx12Init)
-        return;
-
-    // On shutting down don't invalidate device objects
-    ImGui_ImplDX12_Shutdown(true, !State::Instance().isShuttingDown);
-    MenuCommon::Shutdown();
+    // The renderer backend only exists once Render() has run; the two descriptor heaps are made
+    // in the constructor. Returning here when _dx12Init was false leaked both of them for every
+    // menu that was destroyed before its first frame.
+    if (_dx12Init)
+    {
+        // On shutting down don't invalidate device objects
+        ImGui_ImplDX12_Shutdown(true, !State::Instance().isShuttingDown);
+        MenuCommon::Shutdown();
+    }
 
     SAFE_RELEASE(_rtvDescHeap);
     SAFE_RELEASE(_srvDescHeap);
