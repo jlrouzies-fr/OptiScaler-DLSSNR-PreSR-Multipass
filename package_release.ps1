@@ -38,6 +38,8 @@ if ($hasUnlock -ne $EnableRtx40Mfg.IsPresent) { throw 'DLL RTX 40 MFG feature do
 # Streamline/MFG, removed NR helpers or discarded experiment files entering this package.
 $files = @{}
 $files['OptiScaler.dll'] = Join-Path $buildRoot 'OptiScaler.dll'
+$files['docs/RELEASE-v0.8.93.md'] = Join-Path $root 'docs/RELEASE-v0.8.93.md'
+$files['docs/RELEASE-v0.8.92.md'] = Join-Path $root 'docs/RELEASE-v0.8.92.md'
 $files['docs/RELEASE-v0.8.91.md'] = Join-Path $root 'docs/RELEASE-v0.8.91.md'
 $files['docs/RELEASE-v0.8.9.md'] = Join-Path $root 'docs/RELEASE-v0.8.9.md'
 $files['docs/RELEASE-v0.8.8.md'] = Join-Path $root 'docs/RELEASE-v0.8.8.md'
