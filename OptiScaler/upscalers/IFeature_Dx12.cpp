@@ -52,6 +52,9 @@ bool IFeature_Dx12::Init(ID3D12Device* InDevice, ID3D12GraphicsCommandList* InCo
 bool IFeature_Dx12::Evaluate(ID3D12GraphicsCommandList* InCommandList, NVSDK_NGX_Parameter* InParameters,
                              ID3D12CommandQueue* timingQueue, uint64_t submissionEpoch, bool sourceRayReconstruction)
 {
+    // Before anything reads the neural settings, and for every frame whether the neural pass
+    // is on or off -- a front end has to be able to switch it back on (see Config.cpp).
+    Config::Instance()->PollLiveNrSettings();
     const bool interop = timingQueue != nullptr;
     if (!interop)
         submissionEpoch = State::Instance().frameCount;

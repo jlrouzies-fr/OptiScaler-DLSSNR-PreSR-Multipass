@@ -1918,6 +1918,137 @@ void Config::CheckUpscalerFiles()
 
 std::vector<std::string> Config::GetConfigLog() { return _log; }
 
+// Live [DlssNr] settings.
+//
+// OptiScaler reads its ini once, in the constructor above; after that the only way to change a
+// model setting was this process's own menu. A front end outside it -- the DLSS5-Feeder panel,
+// which draws in a 32-bit game while this DLL sits in a 64-bit helper -- can only write the
+// file, and until now had to restart the helper for the write to count.
+//
+// So the file's time stamp is looked at every 200 ms, from the neural pass's own thread, and
+// when it has moved AND then stood still for one look (a writer setting several keys rewrites
+// the whole file once per key; half-written is not a state to read), the model settings below
+// are read again and assigned. Nothing else is needed for them to take effect: the neural
+// proxy compares the settings it was built with against the current ones every frame and
+// rebuilds itself, exactly as it does when the menu changes them.
+//
+// Only the settings the menu itself changes while running. A key that is absent or "auto"
+// goes back to the built-in default, which is what it means in the file.
+void Config::PollLiveNrSettings()
+{
+    static std::mutex pollMutex;
+    static ULONGLONG nextLook = 0;
+    static FILETIME loaded {}, seen {};
+    static bool primed = false;
+
+    const ULONGLONG now = GetTickCount64();
+    std::lock_guard lock(pollMutex);
+    if (now < nextLook)
+        return;
+    nextLook = now + 200;
+
+    WIN32_FILE_ATTRIBUTE_DATA fa {};
+    if (!GetFileAttributesExW(absoluteFileName.c_str(), GetFileExInfoStandard, &fa))
+        return;
+    if (!primed)
+    {
+        primed = true;
+        loaded = seen = fa.ftLastWriteTime;
+        return;
+    }
+    if (CompareFileTime(&fa.ftLastWriteTime, &loaded) == 0)
+        return;
+    if (CompareFileTime(&fa.ftLastWriteTime, &seen) != 0)
+    {
+        seen = fa.ftLastWriteTime; // still being written; look again
+        return;
+    }
+    loaded = fa.ftLastWriteTime;
+
+    CSimpleIniA fresh;
+    if (fresh.LoadFile(absoluteFileName.c_str()) != SI_OK || fresh.GetSectionSize("DlssNr") <= 0)
+    {
+        LOG_WARN("DLSS-NR live settings: OptiScaler.ini changed but could not be read; keeping the current settings");
+        return;
+    }
+
+    const auto text = [&](const char* key) -> std::optional<std::string>
+    {
+        std::string value = fresh.GetValue("DlssNr", key, "auto");
+        std::ranges::transform(value, value.begin(), [](unsigned char c) { return (char) std::tolower(c); });
+        if (value.empty() || value == "auto")
+            return std::nullopt;
+        return value;
+    };
+    const auto number = [&](const char* key, float lo, float hi) -> std::optional<float>
+    {
+        float result = 0.0f;
+        if (auto value = text(key); value.has_value() && isFloat(*value, result))
+            return std::clamp(result, lo, hi);
+        return std::nullopt;
+    };
+    const auto count = [&](const char* key, uint32_t hi) -> std::optional<uint32_t>
+    {
+        uint32_t result = 0;
+        if (auto value = text(key); value.has_value() && isUInt(*value, result))
+            return std::min(result, hi);
+        return std::nullopt;
+    };
+    const auto flag = [&](const char* key) -> std::optional<bool>
+    {
+        const auto value = text(key);
+        if (value == "true" || value == "1")
+            return true;
+        if (value == "false" || value == "0")
+            return false;
+        return std::nullopt;
+    };
+
+    std::string changes;
+    const auto take = [&](auto& option, const auto& value, const char* key)
+    {
+        using Plain = std::remove_cvref_t<decltype(value)>;
+        if (static_cast<const Plain&>(option) == value)
+            return;
+        option = value;
+        changes += std::format("{}{}={}", changes.empty() ? "" : ", ", key,
+                               value.has_value() ? std::format("{}", *value) : std::string("auto"));
+    };
+
+    take(DlssNrEnabled, flag("Enabled"), "Enabled");
+    take(DlssNrPreset, count("Preset", 16u), "Preset");
+    take(DlssNrStyle, count("Style", 2u), "Style");
+    take(DlssNrIntensity, number("Intensity", 0.0f, 2.0f), "Intensity");
+    take(DlssNrLocalStructure, number("LocalStructure", 0.0f, 2.0f), "LocalStructure");
+    take(DlssNrLocalTone, number("LocalTone", 0.0f, 2.0f), "LocalTone");
+    take(DlssNrSkinStructure, number("SkinStructure", -1.0f, 2.0f), "SkinStructure");
+    take(DlssNrAutoMask, flag("AutoMask"), "AutoMask");
+    take(DlssNrUnlockPasses, flag("UnlockPasses"), "UnlockPasses");
+    take(DlssNrPasses, count("Passes", 10u), "Passes");
+    take(DlssNrWorkingScale, number("WorkingScale", 0.25f, 2.0f), "WorkingScale");
+    // How the model's picture is put back, and what it is told white is. These are read every
+    // frame where they are used, so they need no rebuild at all. Limits as in the menu.
+    take(DlssNrTransferStrength, number("TransferStrength", 0.0f, 2.0f), "TransferStrength");
+    take(DlssNrColourStrength, number("ColourStrength", 0.0f, 4.0f), "ColourStrength");
+    take(DlssNrMaxRatio, number("MaxRatio", 1.0f, 8.0f), "MaxRatio");
+    take(DlssNrWhitePointScale, number("WhitePointScale", 0.25f, 2000.0f), "WhitePointScale");
+    take(DlssNrWhitePointSource, count("WhitePointSource", 3u), "WhitePointSource");
+    take(DlssNrWhitePointTrim, number("WhitePointTrim", 0.001f, 1000.0f), "WhitePointTrim");
+    take(DlssNrAutoExposureTrim, number("AutoExposureTrim", 0.001f, 1000.0f), "AutoExposureTrim");
+    take(DlssNrAutoExposureHighlightProtection, number("AutoExposureHighlightProtection", 0.0f, 100.0f),
+         "AutoExposureHighlightProtection");
+    take(DlssNrSkinProtection, flag("SkinProtection"), "SkinProtection");
+    take(DlssNrSkinDetail, number("SkinDetail", 0.0f, 1.0f), "SkinDetail");
+    take(DlssNrSkinColour, number("SkinColour", 0.0f, 1.0f), "SkinColour");
+    take(DlssNrEnvironmentDetail, number("EnvironmentDetail", 0.0f, 1.0f), "EnvironmentDetail");
+    take(DlssNrEnvironmentColour, number("EnvironmentColour", 0.0f, 1.0f), "EnvironmentColour");
+
+    if (changes.empty())
+        LOG_INFO("DLSS-NR live settings: OptiScaler.ini was rewritten; no model setting changed");
+    else
+        LOG_INFO("DLSS-NR live settings: read from OptiScaler.ini while running: {}", changes);
+}
+
 std::optional<std::string> Config::readString(std::string section, std::string key, bool lowercase)
 {
     std::string value = ini.GetValue(section.c_str(), key.c_str(), "auto");

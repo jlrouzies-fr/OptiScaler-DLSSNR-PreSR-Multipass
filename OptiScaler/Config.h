@@ -797,6 +797,11 @@ class Config
 
     std::vector<std::string> GetConfigLog();
 
+    // The [DlssNr] model settings, re-read from OptiScaler.ini while the process runs when a
+    // front end (the DLSS5-Feeder panel) has rewritten the file. Called once per neural frame
+    // from the render thread; costs one file-attribute query every 200 ms.
+    void PollLiveNrSettings();
+
     static Config* Instance();
 
   private:

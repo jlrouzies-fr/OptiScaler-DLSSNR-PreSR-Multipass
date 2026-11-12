@@ -43,6 +43,7 @@ bool IFeature_Vk::Init(VkInstance InInstance, VkPhysicalDevice InPD, VkDevice In
 
 bool IFeature_Vk::Evaluate(VkCommandBuffer InCmdBuffer, NVSDK_NGX_Parameter* InParameters)
 {
+    Config::Instance()->PollLiveNrSettings(); // every frame, neural pass on or off (see Config.cpp)
     if (!IsInited())
     {
         LOG_ERROR("Not inited!");
